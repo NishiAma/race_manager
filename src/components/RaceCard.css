@@ -1,0 +1,78 @@
+.race-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.race-header {
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  background-color: #f8f9fa;
+}
+
+.race-header:hover {
+  background-color: #f0f0f0;
+}
+
+.status-badge {
+  padding: 5px 10px;
+  border-radius: 15px;
+  font-size: 0.9em;
+  text-transform: capitalize;
+}
+
+.status-badge.completed {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.status-badge.in-progress {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-badge.scheduled {
+  background-color: #cce5ff;
+  color: #004085;
+}
+
+.race-details {
+  padding: 15px;
+}
+
+.race-details table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.race-details th,
+.race-details td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.race-details th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.edit-race-btn {
+  float: right;
+  padding: 8px 16px;
+  margin-bottom: 10px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.edit-race-btn:hover {
+  background-color: #0056b3;
+} 
