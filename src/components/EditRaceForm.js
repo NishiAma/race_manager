@@ -17,43 +17,34 @@ function EditRaceForm({ race, onSubmit, onCancel }) {
     setIsSubmitting(true);
 
     try {
-      // First update the race results
-      const updateResponse = await fetch(`/api/v1/races/${race.id}`, {
+      // Update race with places
+      const updateData = {
+        race: {
+          race_students: formData.race_students.map(student => ({
+            id: student.id,
+            place: parseInt(student.place)
+          }))
+        }
+      };
+
+      console.log('Sending update data:', updateData);
+
+      const response = await fetch(`/api/v1/races/${race.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          race: {
-            race_students: formData.race_students.map(student => ({
-              id: student.id,
-              place: parseInt(student.place)
-            }))
-          }
-        }),
+        body: JSON.stringify(updateData),
       });
 
-      if (!updateResponse.ok) {
-        throw new Error('Failed to update race results');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Server response:', errorData);
+        throw new Error(errorData.errors ? errorData.errors.join(', ') : 'Failed to update race');
       }
 
-      // Then complete the race with empty body
-      const completeResponse = await fetch(`/api/v1/races/${race.id}/complete`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}) // Send empty object as body
-      });
-
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.text();
-        console.error('Complete race response:', errorData);
-        throw new Error('Failed to complete race');
-      }
-
-      const completedRace = await completeResponse.json();
-      onSubmit(completedRace);
+      const updatedRace = await response.json();
+      onSubmit(updatedRace);
     } catch (err) {
       setError('Failed to update race results. Please try again.');
       console.error('Error updating race:', err);

@@ -59,7 +59,7 @@ function NewRaceForm({ onSubmit, onCancel }) {
         race: {
           name: formData.name,
           status: 'ready',
-          race_students: formData.participants
+          race_students_attributes: formData.participants
             .filter(p => p.studentId)
             .map(p => ({
               student_id: parseInt(p.studentId),
@@ -77,9 +77,6 @@ function NewRaceForm({ onSubmit, onCancel }) {
         },
         body: JSON.stringify(raceData),
       });
-
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
 
       if (!response.ok) {
         const errorData = await response.json();
