@@ -1,29 +1,123 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import NewStudentForm from './NewStudentForm';
 import './NewRaceForm.css';
 
 function NewRaceForm({ onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     name: '',
     participants: [
-      { id: 1, name: '', lane: 1 },
-      { id: 2, name: '', lane: 2 },
+      { id: 1, name: '', lane: 1, studentId: '' },
+      { id: 2, name: '', lane: 2, studentId: '' },
     ]
   });
+  const [students, setStudents] = useState([]);
+  const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingStudents, setIsLoadingStudents] = useState(true);
+  const [showNewStudentForm, setShowNewStudentForm] = useState(false);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSubmit({
-      ...formData,
-      status: 'scheduled',
-      participants: formData.participants.filter(p => p.name.trim() !== '')
-    });
+  // Fetch students when component mounts
+  useEffect(() => {
+    fetchStudents();
+  }, []);
+
+  const fetchStudents = async () => {
+    try {
+      setIsLoadingStudents(true);
+      const response = await fetch('/api/v1/students');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch students');
+      }
+
+      const data = await response.json();
+      setStudents(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load students. Please try again later.');
+      console.error('Error fetching students:', err);
+    } finally {
+      setIsLoadingStudents(false);
+    }
   };
 
-  const handleParticipantChange = (id, value) => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    // Check for at least two selected students
+    const selectedStudents = formData.participants.filter(p => p.studentId);
+    if (selectedStudents.length < 2) {
+      setError('Please select at least two students for the race');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const raceData = {
+        race: {
+          name: formData.name,
+          status: 'ready',
+          race_students: formData.participants
+            .filter(p => p.studentId)
+            .map(p => ({
+              student_id: parseInt(p.studentId),
+              lane: p.lane
+            }))
+        }
+      };
+
+      console.log('Sending race data:', JSON.stringify(raceData));
+
+      const response = await fetch('/api/v1/races', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(raceData),
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Server response:', errorData);
+        
+        const errorMessage = errorData.errors 
+          ? Object.entries(errorData.errors)
+              .map(([key, messages]) => 
+                key === 'base' 
+                  ? messages.join(', ')
+                  : `${key}: ${messages.join(', ')}`)
+              .join('; ')
+          : 'Failed to create race';
+          
+        throw new Error(errorMessage);
+      }
+
+      const createdRace = await response.json();
+      console.log('Created race:', createdRace);
+      onSubmit(createdRace);
+    } catch (err) {
+      setError(err.message);
+      console.error('Error creating race:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleParticipantChange = (laneId, studentId) => {
+    const selectedStudent = students.find(s => s.id === studentId);
     setFormData({
       ...formData,
       participants: formData.participants.map(p => 
-        p.id === id ? { ...p, name: value } : p
+        p.id === laneId ? {
+          ...p,
+          studentId: studentId,
+          name: selectedStudent ? selectedStudent.name : ''
+        } : p
       )
     });
   };
@@ -31,9 +125,10 @@ function NewRaceForm({ onSubmit, onCancel }) {
   const addLane = () => {
     const newLaneNumber = formData.participants.length + 1;
     const newParticipant = {
-      id: Date.now(), // Using timestamp as a unique id
+      id: Date.now(),
       name: '',
-      lane: newLaneNumber
+      lane: newLaneNumber,
+      studentId: ''
     };
     setFormData({
       ...formData,
@@ -42,12 +137,10 @@ function NewRaceForm({ onSubmit, onCancel }) {
   };
 
   const removeLane = (laneId) => {
-    // Don't allow removing if only 2 lanes remain
     if (formData.participants.length <= 2) return;
 
     const updatedParticipants = formData.participants
       .filter(p => p.id !== laneId)
-      // Reassign lane numbers sequentially
       .map((p, index) => ({
         ...p,
         lane: index + 1
@@ -60,18 +153,50 @@ function NewRaceForm({ onSubmit, onCancel }) {
   };
 
   const isFormValid = () => {
-    const lane1Participant = formData.participants.find(p => p.lane === 1);
-    const lane2Participant = formData.participants.find(p => p.lane === 2);
+    const selectedStudents = formData.participants.filter(p => p.studentId);
     return (
       formData.name.trim() !== '' &&
-      lane1Participant?.name.trim() !== '' &&
-      lane2Participant?.name.trim() !== ''
+      selectedStudents.length >= 2
     );
   };
+
+  const handleAddStudent = (newStudent) => {
+    setStudents([...students, newStudent]);
+    setShowNewStudentForm(false);
+  };
+
+  if (isLoadingStudents) {
+    return (
+      <div className="new-race-form">
+        <div className="loading">Loading students...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="new-race-form">
       <h3>Create New Race</h3>
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+
+      {showNewStudentForm ? (
+        <NewStudentForm 
+          onSubmit={handleAddStudent}
+          onCancel={() => setShowNewStudentForm(false)}
+        />
+      ) : (
+        <button 
+          type="button" 
+          className="add-student-btn"
+          onClick={() => setShowNewStudentForm(true)}
+        >
+          + Add New Student
+        </button>
+      )}
+
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label htmlFor="name">Race Name:</label>
@@ -90,12 +215,24 @@ function NewRaceForm({ onSubmit, onCancel }) {
             {formData.participants.map(participant => (
               <div key={participant.id} className="participant-input">
                 <label>Lane {participant.lane}:</label>
-                <input
-                  type="text"
-                  value={participant.name}
+                <select
+                  value={participant.studentId}
                   onChange={(e) => handleParticipantChange(participant.id, e.target.value)}
-                  placeholder={`Participant in lane ${participant.lane}`}
-                />
+                  required={participant.lane <= 2}
+                >
+                  <option value="">Select a student</option>
+                  {students.map(student => (
+                    <option 
+                      key={student.id} 
+                      value={student.id}
+                      disabled={formData.participants.some(
+                        p => p.studentId === student.id.toString() && p.id !== participant.id
+                      )}
+                    >
+                      {student.name}
+                    </option>
+                  ))}
+                </select>
                 {formData.participants.length > 2 && (
                   <button 
                     type="button" 
@@ -120,12 +257,17 @@ function NewRaceForm({ onSubmit, onCancel }) {
         <div className="form-actions">
           <button 
             type="submit" 
-            disabled={!isFormValid()}
-            className={!isFormValid() ? 'disabled' : ''}
+            disabled={!isFormValid() || isSubmitting}
+            className={!isFormValid() || isSubmitting ? 'disabled' : ''}
           >
-            Create Race
+            {isSubmitting ? 'Creating...' : 'Create Race'}
           </button>
-          <button type="button" onClick={onCancel} className="cancel-btn">
+          <button 
+            type="button" 
+            onClick={onCancel} 
+            className="cancel-btn"
+            disabled={isSubmitting}
+          >
             Cancel
           </button>
         </div>

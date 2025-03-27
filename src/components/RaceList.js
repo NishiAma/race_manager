@@ -1,49 +1,103 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import RaceCard from './RaceCard';
 import NewRaceForm from './NewRaceForm';
 import './RaceList.css';
 
-// Sample data structure
-const sampleRaces = [
-  {
-    id: 1,
-    name: "100m Sprint - Heat 1",
-    status: "completed", // possible values: "scheduled", "in_progress", "completed"
-    participants: [
-      { id: 1, name: "John Doe", lane: 1, place: 1 },
-      { id: 2, name: "Jane Smith", lane: 2, place: 2 },
-      { id: 3, name: "Mike Johnson", lane: 3, place: 3 },
-    ]
-  },
-  {
-    id: 2,
-    name: "100m Sprint - Heat 2",
-    status: "scheduled",
-    participants: [
-      { id: 4, name: "Sarah Wilson", lane: 1, place: null },
-      { id: 5, name: "Tom Brown", lane: 2, place: null },
-      { id: 6, name: "Lisa Davis", lane: 3, place: null },
-    ]
-  }
-];
 
 function RaceList() {
-  const [races, setRaces] = useState(sampleRaces);
+  const [races, setRaces] = useState([]);
   const [showNewRaceForm, setShowNewRaceForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const handleCreateRace = (newRace) => {
-    setRaces([...races, { ...newRace, id: races.length + 1 }]);
-    setShowNewRaceForm(false);
+  // Fetch races on component mount
+  useEffect(() => {
+    fetchRaces();
+  }, []);
+
+  const fetchRaces = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/v1/races');
+      if (!response.ok) {
+        throw new Error('Failed to fetch races');
+      }
+      const data = await response.json();
+      setRaces(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load races. Please try again later.');
+      console.error('Error fetching races:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleUpdateRace = (updatedRace) => {
-    setRaces(races.map(race => 
-      race.id === updatedRace.id ? updatedRace : race
-    ));
+  const handleCreateRace = async (newRace) => {
+    try {
+      const response = await fetch('/api/v1/races', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newRace),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create race');
+      }
+
+      const createdRace = await response.json();
+      setRaces([...races, createdRace]);
+      setShowNewRaceForm(false);
+      setError(null);
+    } catch (err) {
+      setError('Failed to create race. Please try again.');
+      console.error('Error creating race:', err);
+    }
   };
+
+  const handleUpdateRace = async (updatedRace) => {
+    try {
+      const response = await fetch(`/api/v1/races/${updatedRace.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedRace),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update race');
+      }
+
+      const updatedRaceData = await response.json();
+      setRaces(races.map(race => 
+        race.id === updatedRaceData.id ? updatedRaceData : race
+      ));
+      setError(null);
+    } catch (err) {
+      setError('Failed to update race. Please try again.');
+      console.error('Error updating race:', err);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="race-list">
+        <div className="loading">Loading races...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="race-list">
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+      
       <div className="race-list-header">
         <h2>Current Races</h2>
         <button 
@@ -61,13 +115,17 @@ function RaceList() {
         />
       )}
 
-      {races.map(race => (
-        <RaceCard 
-          key={race.id} 
-          race={race} 
-          onUpdateRace={handleUpdateRace}
-        />
-      ))}
+      {races.length === 0 && !isLoading ? (
+        <div className="no-races">No races found</div>
+      ) : (
+        races.map(race => (
+          <RaceCard 
+            key={race.id} 
+            race={race} 
+            onUpdateRace={handleUpdateRace}
+          />
+        ))
+      )}
     </div>
   );
 }
