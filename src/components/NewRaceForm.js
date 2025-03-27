@@ -42,68 +42,78 @@ function NewRaceForm({ onSubmit, onCancel }) {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
+  e.preventDefault();
+  if (isSubmitting) return; // Prevent duplicate submissions
 
-    // Check for at least two selected students
-    const selectedStudents = formData.participants.filter(p => p.studentId);
-    if (selectedStudents.length < 2) {
-      setError('Please select at least two students for the race');
-      setIsSubmitting(false);
-      return;
+  setError(null);
+  setIsSubmitting(true);
+  
+  // Ensure at least two students are selected
+  const selectedStudents = formData.participants.filter(p => p.studentId);
+  if (selectedStudents.length < 2) {
+    setError('Please select at least two students for the race');
+    setIsSubmitting(false);
+    return;
+  }
+
+  try {
+    const raceData = {
+      race: {
+        name: formData.name,
+        status: 'ready',
+        race_students_attributes: selectedStudents.map(p => ({
+          student_id: parseInt(p.studentId),
+          lane: p.lane
+        }))
+      }
+    };
+
+    console.log('Sending race data:', JSON.stringify(raceData));
+
+    // Abort previous request if any
+    if (window.currentRaceRequest) {
+      window.currentRaceRequest.abort();
+    }
+    const controller = new AbortController();
+    window.currentRaceRequest = controller;
+
+    const response = await fetch('/api/v1/races', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(raceData),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Server response:', errorData);
+      throw new Error(
+        errorData.errors
+          ? Object.entries(errorData.errors)
+              .map(([key, messages]) =>
+                key === 'base'
+                  ? messages.join(', ')
+                  : `${key}: ${messages.join(', ')}`
+              )
+              .join('; ')
+          : 'Failed to create race'
+      );
     }
 
-    try {
-      const raceData = {
-        race: {
-          name: formData.name,
-          status: 'ready',
-          race_students_attributes: formData.participants
-            .filter(p => p.studentId)
-            .map(p => ({
-              student_id: parseInt(p.studentId),
-              lane: p.lane
-            }))
-        }
-      };
-
-      console.log('Sending race data:', JSON.stringify(raceData));
-
-      const response = await fetch('/api/v1/races', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(raceData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Server response:', errorData);
-        
-        const errorMessage = errorData.errors 
-          ? Object.entries(errorData.errors)
-              .map(([key, messages]) => 
-                key === 'base' 
-                  ? messages.join(', ')
-                  : `${key}: ${messages.join(', ')}`)
-              .join('; ')
-          : 'Failed to create race';
-          
-        throw new Error(errorMessage);
-      }
-
-      const createdRace = await response.json();
-      console.log('Created race:', createdRace);
-      onSubmit(createdRace);
-    } catch (err) {
+    const createdRace = await response.json();
+    console.log('Created race:', createdRace);
+    onSubmit(createdRace);
+  } catch (err) {
+    if (err.name !== 'AbortError') {
       setError(err.message);
       console.error('Error creating race:', err);
-    } finally {
-      setIsSubmitting(false);
     }
-  };
+  } finally {
+    setIsSubmitting(false);
+    window.currentRaceRequest = null;
+  }
+};
+
 
   const handleParticipantChange = (laneId, studentId) => {
     const selectedStudent = students.find(s => s.id === studentId);
